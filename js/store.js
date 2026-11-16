@@ -44,10 +44,63 @@ return u + (u.indexOf('?') < 0 ? '?' : '&') + 'k=' + PAGE_KEY;
 var localHost = location.hostname === '127.0.0.1' || location.hostname === 'localhost';
 var onMirrorPort = false;
 
-var fallbackHost = '';
-var fallbackMirror = '';
+/* 同源同步接口：页面由 sync-server.js 托管时，这个地址才通。
+   GitHub Pages 上探测会 404，同步自动保持关闭，页面照常本地可用。 */
+var SYNC_DATA = 'api/data';
+var SYNC_HEALTH = 'api/health';
 
-if (isHttp && localHost && !onMirrorPort) MIRRORS.push(withKey(fallbackMirror));
+var syncProbed = false;
+
+/* 有没有可用的同步通道：局域网镜像，或云中转（GitHub Gist / 云服务）。 */
+function hasSync() { return MIRRORS.length > 0 || !!cloudAPI(); }
+
+/**
+ * 探测同步通道。三种情况：
+ *   ① 配了云中转（GZT_CLOUD 已由 cloud-gist.js / 平台注入）→ 直接启用，任何网络都通
+ *   ② 页面由 sync-server.js 托管（同源有 /api/health）→ 启用局域网同步
+ *   ③ 挂在 GitHub Pages 等静态托管上 → 探测失败，保持关闭，页面照常本地可用
+ */
+function probeSync() {
+if (syncProbed || !g.fetch) return;
+syncProbed = true;
+
+/* ① 云中转 */
+if (cloudAPI()) {
+isHttp = true;
+try { startWatch(); } catch (e) {}
+try { mirrorPull(); } catch (e) {}
+try {
+setTimeout(function () {
+try { if (diskState === 'empty') mirrorPush(true); } catch (e) {}
+}, 2200);
+} catch (e) {}
+return;
+}
+
+/* ② 局域网 */
+if (!/^https?:$/.test(location.protocol)) return;
+
+try {
+g.fetch(withKey(SYNC_HEALTH), { cache: 'no-store' })
+.then(function (r) { return r.ok ? r.json() : null; })
+.then(function (d) {
+if (!d || !d.ok) return;
+isHttp = true;
+MIRRORS.push(withKey(SYNC_DATA));
+
+try { startWatch(); } catch (e) {}
+try { mirrorPull(); } catch (e) {}
+/* 只有"服务端还是空的"才把本机内容推上去（老设备第一次接入的场景）。
+   服务端已有数据时上面那次 pull 会把它载进来，这里不再推，
+   避免两边互相触发、白白刷新 stamp。 */
+try {
+setTimeout(function () {
+try { if (diskState === 'empty') mirrorPush(true); } catch (e) {}
+}, 2200);
+} catch (e) {}
+}).catch(function () { });
+} catch (e) { }
+}
 
 var roomEmpty = !((function () { try { return lsGet(KEY) || ''; } catch (e) { return ''; } })()).length;
 var mirrorBusy = false;
@@ -442,6 +495,9 @@ try { if (g.App && g.App.renderRail) g.App.renderRail(); } catch (e) {}
 
 function mirrorPull(force) {
 if ((!MIRRORS.length && !cloudAPI()) || !g.fetch) return false;
+/* 先确保本机数据已读进内存，否则下面比 updatedAt 时 db 还是 null，
+   会被当成"本机什么都没有"，让远端无条件覆盖本机内容。 */
+try { load(); } catch (e) {}
 if (/[?&]r=1(&|$)/.test(location.search)) {
 
 if (!force) {
@@ -450,6 +506,9 @@ var u0 = new URL(location.href);
 u0.searchParams.delete('r');
 if (g.history && g.history.replaceState) g.history.replaceState(null, '', u0.href);
 } catch (e) {}
+/* 刚载入过远端那份（地址里带过 r=1）：同步通道本身是好的，
+   这里必须把 ready 标上，否则后面的 5 秒轮询会因为 ready=false 一直不跑。 */
+mirrorReady = true;
 return false;
 }
 }
@@ -556,7 +615,10 @@ else if (d.querySelector && d.querySelector('.mask')) why = 'mask';
 
 else {
 var ae = d.activeElement;
-if (ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName || '')) why = 'typing';
+/* 首启的「给工作台起个名字」浮层也带输入框，但它不是在写内容，
+   不该因为它挡着就不同步。 */
+var inRename = !!(ae && ae.closest && ae.closest('#rename-overlay'));
+if (ae && !inRename && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName || '')) why = 'typing';
 }
 }
 try { g.__gztWhy = why; } catch (e) {}
@@ -583,7 +645,7 @@ return true;
 }
 
 function pullSoft(manual) {
-if (softSyncing || !MIRRORS.length || !g.fetch) return false;
+if (softSyncing || !hasSync() || !g.fetch) return false;
 softSyncing = true;
 tryFetch(MIRRORS, { cache: 'no-store' }).then(function (r) {
 softSyncing = false;
@@ -702,6 +764,10 @@ stopWatch();
 });
 }
 startWatch();
+
+/* 启动时探测同源同步服务：只有 sync-server.js 托管时才打开同步，
+   挂在 GitHub Pages 上探测失败，一切照旧（数据仅存本机）。 */
+try { probeSync(); } catch (e) {}
 
 var db = null;
 var listeners = [];

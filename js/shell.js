@@ -529,7 +529,14 @@ var col = $('#colophon');
 var a = db.meta.archive;
 
 var where;
+var _cloud = !!(g.GZT_CLOUD && g.GZT_CLOUD.on);
+var _lan = false;
+try { _lan = !_cloud && !!(S.mirror && S.mirror.ready && S.mirror.ready()); } catch (e) {}
 if (!S.storageOk()) where = '<b class="warn">浏览器不让存，关掉就丢</b>';
+else if (_cloud) where = (g.GZT_CLOUD.kind === 'gist')
+? '数据经由你自己的私密 Gist 同步'
+: '数据存在云端，多设备同一份';
+else if (_lan) where = '数据经本机服务同步 · 同一 WiFi 生效';
 else where = '数据只在这个浏览器里，不上传';
 
 col.innerHTML = (name === '我的工作台' ? '' : esc(name) + ' · ') + 'v' + S.VERSION +
@@ -1820,21 +1827,54 @@ var rows = [
 ];
 
 var cloudOn = !!(g.GZT_CLOUD && g.GZT_CLOUD.on);
+var gistOn = cloudOn && g.GZT_CLOUD.kind === 'gist';
+var gistReady = !!(g.GztCloud && g.GztCloud.connected && g.GztCloud.connected());
+var lanOn = false;
+try { lanOn = !cloudOn && !!(S.mirror && S.mirror.ready && S.mirror.ready()); } catch (e) {}
 var kb = Math.max(1, Math.round(size / 1024));
 
-var headDesc = cloudOn
+var headDesc = gistOn
+? '数据存在<b>你自己的 GitHub 私密 Gist</b> 里：手机、电脑、家里、公司、4G 打开都是同一份，不用连同一个 WiFi，也不用这台电脑开着。'
+: (cloudOn
 ? '把所有数据打成一个 .json 包下载留底。数据存在<b>云端</b>：手机和电脑看到的是同一份，不用连同一个 WiFi，也不用这台电脑开着。'
-: '把全部数据打成一个 .json 包，拷到另一台设备上还原 —— 笔记、案评、书、年表、待办、日记、账本、文档、网址都在里头。数据只存在你自己的浏览器里，不上传任何地方。';
+: (lanOn
+? '手机和电脑连<b>同一个 WiFi</b> 时自动同步：这台电脑上的同步服务开着，两边改动几秒内就会互相跟上。想在别的网络也同步，用下面的「跨网络同步」。'
+: '把全部数据打成一个 .json 包，拷到另一台设备上还原 —— 笔记、案评、书、年表、待办、日记、账本、文档、网址都在里头。数据只存在你自己的浏览器里，不上传任何地方。'));
 
-var verCard = cloudOn
+/* 跨网络同步（GitHub 私密 Gist）：平台云服务才隐藏，Gist 已连接时仍要能生成同步码/断开 */
+var gistCard = (cloudOn && !gistOn)
+? ''
+: '<div class="sync-card wide"><div class="sc-glyph">网</div>' +
+'<div class="sc-main"><div class="sc-title">跨网络同步' +
+(gistReady ? ' · <b>已开启</b>' : '') + '</div>' +
+'<div class="sc-desc">' +
+(gistReady
+? '数据存在你自己 GitHub 账号下的一个私密 Gist 里。任何网络、任何设备，打开同一个网址就是同一份。' +
+'<br>换设备时点「生成同步码」，把那段文字发到新设备上粘贴一次即可。'
+: '想让手机在 4G、在公司、在别的地方也能和电脑同步 —— 用一个你自己的 GitHub 私密 Gist 当中转。' +
+'<br>需要一个 GitHub 令牌（勾选 <b>Gists</b> 读写权限即可，别用带仓库权限的完整令牌）。' +
+'<br>点右边的按钮，粘贴令牌就会自动建好；也可以直接粘贴别处生成的同步码。') +
+'</div></div>' +
+(gistReady
+? '<button class="btn sc-btn" data-act="gist-code">生成同步码</button>' +
+'<button class="btn sc-btn" data-act="gist-off">断开</button>'
+: '<button class="btn primary sc-btn" data-act="gist-on">开启跨网络同步…</button>') +
+'</div>';
+
+var verCard = (cloudOn && !gistOn)
 ? '<div class="sync-card wide"><div class="sc-glyph">往</div>' +
 '<div class="sc-main"><div class="sc-title">版本历史</div>' +
 '<div class="sc-desc">服务端每次写入前自动留一份上一版，最多 50 份。误删或改错了，可以挑一版整体恢复；' +
 '想长期留底仍建议用「导出全部数据」。<span class="sc-live" id="verLive"></span></div></div>' +
 '<button class="btn sc-btn" data-act="ver-open">看看历史…</button></div>'
+: (gistOn
+? '<div class="sync-card wide"><div class="sc-glyph">往</div>' +
+'<div class="sc-main"><div class="sc-title">留个底</div>' +
+'<div class="sc-desc">Gist 本身会记着每一次写入的历史版本（在 GitHub 那个 Gist 页面右上角「Revisions」能看到），' +
+'但这里不做一键恢复。重要节点请用「导出全部数据」存一份 .json。</div></div></div>'
 : '<div class="sync-card wide"><div class="sc-glyph">往</div>' +
 '<div class="sc-main"><div class="sc-title">留个底</div>' +
-'<div class="sc-desc">这个版本的数据只存在你自己的浏览器里，没有服务端历史。重要节点请用「导出全部数据」存一份 .json，换设备或清缓存后靠它还原。</div></div></div>';
+'<div class="sc-desc">这个版本的数据只存在你自己的浏览器里，没有服务端历史。重要节点请用「导出全部数据」存一份 .json，换设备或清缓存后靠它还原。</div></div></div>');
 
 var updCard = '<div class="sync-card"><div class="sc-glyph">新</div>' +
 '<div class="sc-title">应用版本</div>' +
@@ -1879,20 +1919,40 @@ var envCard = '<div class="sync-card"><div class="sc-glyph">境</div>' +
 '<button class="btn sc-btn" data-act="mbar-style">功能总览顶栏：' +
 (neutral ? '深色书脊' : '纸色') + '　点一下切换</button>' + installHtml + '</div>';
 
-var totalNote = cloudOn
+var totalNote = gistOn
+? '合计约 <b>' + kb + '</b> KB（浏览器本地一份 + 你的私密 Gist 一份，任何网络都自动保持一致）'
+: (cloudOn
 ? '合计约 <b>' + kb + '</b> KB（浏览器缓存一份 + 云端一份，两边自动保持一致）'
-: '合计约 <b>' + kb + '</b> KB（只存在这个浏览器里，不上传）';
+: (lanOn
+? '合计约 <b>' + kb + '</b> KB（本机浏览器一份 + 这台电脑上一份，同一 WiFi 下自动保持一致）'
+: '合计约 <b>' + kb + '</b> KB（只存在这个浏览器里，不上传）'));
 
-var syncNotes = cloudOn
+var LAN_NOTES = '<li>同步靠这台电脑上的服务：手机和电脑要连<b>同一个 WiFi</b>，电脑上的同步窗口不能关。</li>' +
+'<li>任何一处改动都会写回这台电脑；另一个页面开着时每 5 秒问一次，看到变化会自动跟上。</li>' +
+'<li>正在输入框里打字、或这边还有没存上的改动时，<b>不会替你换内容</b> —— 顶部浮一条提示，点了才载入。</li>' +
+'<li>两边同时改仍会互相覆盖（没有冲突合并）。在手机上动手前，先看这边是不是最新。</li>' +
+'<li>离开这个 WiFi、或关掉电脑上的服务时，页面照样能打开和编辑，改动暂存在本机，回到同一 WiFi 再打开会自动补上。</li>';
+
+var GIST_NOTES = '<li>数据存在<b>你自己的 GitHub 私密 Gist</b> 里：任何网络、任何设备打开同一个网址都是同一份。</li>' +
+'<li>任何一处改动都会写回 Gist；另一个页面开着时每几秒问一次，看到变化会自动跟上。</li>' +
+'<li>正在输入框里打字、或这边还有没存上的改动时，<b>不会替你换内容</b> —— 顶部浮一条提示，点了才载入。</li>' +
+'<li>两边同时改仍会互相覆盖（没有冲突合并）。在手机上动手前，先看这边是不是最新。</li>' +
+'<li>令牌存在本机浏览器里，只用于读写这一个 Gist；换设备时点「生成同步码」粘一次就行，清掉站点数据后要重新连。</li>';
+
+var syncNotes = gistOn
+? GIST_NOTES
+: (cloudOn
 ? '<li>数据存在<b>云端</b>：在家里、在公司、用 4G，打开同一个网址都是同一份，不需要连这台电脑。</li>' +
 '<li>任何一处改动都会写回云端；另一个页面开着时每 5 秒问一次，看到变化会自动跟上。</li>' +
 '<li>正在输入框里打字、或这边还有没存上的改动时，<b>不会替你换内容</b> —— 顶部浮一条提示，点了才载入。</li>' +
 '<li>两边同时改仍会互相覆盖（没有冲突合并）。在手机上动手前，先看这边是不是最新。</li>' +
 '<li>服务端自动留最近 <b>50 份</b>历史，误删或改错了到「版本历史」挑一版恢复；重要节点仍建议导一次包。</li>'
+: (lanOn ? LAN_NOTES
+: (gistReady ? GIST_NOTES
 : '<li>数据只存在<b>当前这个浏览器</b>里：笔记、书、日记、账本一改就保存在本机，刷新和关页都还在。</li>' +
 '<li>换设备、换浏览器，或清掉浏览器数据时，需要先在「导出全部数据」里存一份 .json，再到新设备「从包还原」。</li>' +
 '<li>还原会整份替换现有数据；只想补齐缺的条目，选「只补缺」。</li>' +
-'<li>建议每隔一阵导出一次留底 —— 这个版本没有云端，也不会自动备份到任何地方。</li>';
+'<li>建议每隔一阵导出一次留底 —— 这个版本没有云端，也不会自动备份到任何地方。</li>')));
 
 pane.innerHTML =
 '<div class="view"><div class="sync-wrap">' +
@@ -1905,7 +1965,7 @@ pane.innerHTML =
 '    <div class="sc-desc">选一个数据包导进来。动手之前先让你看清包里有什么，可以选「只补缺」。</div>' +
 '    <button class="btn sc-btn" data-act="sync-import">选包导入…</button>' +
 '    <input type="file" id="syncFile" accept=".json,application/json" class="hidden"></div>' +
-'  ' + verCard + updCard + envCard +
+'  ' + gistCard + verCard + updCard + envCard +
 (cloudOn ? '<div class="sync-card"><div class="sc-glyph">钥</div><div class="sc-title">登录方式</div>' +
 '<div class="sc-desc">现在是邮箱验证码登录。设一个密码之后，下次打开只要输邮箱和密码，' +
 '不用再等邮件 —— 会话过期时省掉「发码、查收、输码」三步。</div>' +
@@ -2171,6 +2231,95 @@ refresh();
 });
 act('sync-export', exportAll);
 act('sync-import', pickImport);
+
+/* ---------- 跨网络同步（GitHub 私密 Gist） ---------- */
+
+act('gist-on', function () {
+modal({
+wide: true,
+title: '开启跨网络同步',
+body:
+'<p class="hint">用一个你自己的 GitHub 私密 Gist 当中转，任何网络、任何设备都能同步。</p>' +
+'<ol class="hint" style="padding-left:20px;margin:10px 0">' +
+'<li>打开 <code>github.com/settings/tokens/new</code>（Classic token）</li>' +
+'<li>Note 随便写，比如「工作台同步」；有效期选个长的</li>' +
+'<li>权限只勾 <b>gist</b> 这一项，别的都不用勾</li>' +
+'<li>生成后复制那串 <code>ghp_...</code>，粘到下面</li>' +
+'</ol>' +
+'<p class="hint">已经在别的设备上开通过？直接粘贴那边的「同步码」（<code>GZT1.</code> 开头）也行。</p>' +
+'<label class="hint" style="display:block;margin-top:12px">令牌或同步码</label>' +
+'<textarea id="gistIn" class="st-in" rows="4" spellcheck="false" ' +
+'placeholder="ghp_xxxxxxxxxxxxxxxx   或   GZT1.eyJ0Ijoi..."></textarea>' +
+'<div class="hint" id="gistMsg" style="margin-top:8px"></div>',
+foot: '<button class="btn" data-close>算了</button>' +
+'<button class="btn primary" data-act="gist-connect">连接</button>',
+onMount: function (m) { setTimeout(function () { var t = m.querySelector('#gistIn'); if (t) t.focus(); }, 40); }
+});
+});
+
+act('gist-connect', function (el, e) {
+var box = $('#gistIn');
+var msg = $('#gistMsg');
+if (!box) return;
+var v = String(box.value || '').trim();
+if (!v) { if (msg) msg.textContent = '先贴点东西进来'; return; }
+if (msg) { msg.textContent = '正在连接…'; msg.style.color = ''; }
+if (!g.GztCloud) { if (msg) msg.textContent = '同步模块没加载，刷新页面试试'; return; }
+g.GztCloud.connect(v).then(function (r) {
+if (!r.ok) {
+if (msg) { msg.textContent = r.msg || '连接失败'; msg.style.color = '#8a2f2b'; }
+return;
+}
+if (msg) { msg.textContent = '连上了，正在重新载入…'; msg.style.color = '#2f6b4f'; }
+setTimeout(function () { location.reload(); }, 700);
+}, function (err) {
+if (msg) msg.textContent = (err && err.message) || '连接失败';
+});
+});
+
+act('gist-code', function () {
+var code = g.GztCloud ? g.GztCloud.code() : '';
+if (!code) { toast('还没连上', 'err'); return; }
+modal({
+wide: true,
+title: '同步码',
+body: '<p class="hint">在这台设备上「断开」或在别的设备上粘贴这一段，就能用同一份数据。' +
+'<br><b>这段文字等于账号钥匙</b>，只发给你自己的设备，别发群里。</p>' +
+'<textarea class="st-in" rows="6" readonly onclick="this.select()">' + esc(code) + '</textarea>',
+foot: '<button class="btn" data-close>关闭</button>' +
+'<button class="btn primary" data-act="gist-copy">复制</button>'
+});
+});
+
+act('gist-copy', function (el, e) {
+var ta = document.querySelector('#modalRoot .mask:last-child textarea');
+if (!ta) return;
+try { ta.select(); document.execCommand('copy'); } catch (err) {
+try { navigator.clipboard.writeText(ta.value); } catch (e2) {}
+}
+var mask = e.target.closest('.mask');
+if (mask) mask.close();
+toast('已复制');
+});
+
+act('gist-off', function () {
+modal({
+title: '断开跨网络同步',
+body: '<p class="hint">断开后这台设备不再读写那个 Gist，' +
+'<b>已经同步过的数据仍留在浏览器里</b>，不会丢。' +
+'<br>想彻底清掉 Gist 里的那份，去 GitHub 上把它删掉即可。</p>',
+foot: '<button class="btn" data-close>算了</button>' +
+'<button class="btn primary" data-act="gist-off-go">断开</button>'
+});
+});
+
+act('gist-off-go', function (el, e) {
+try { g.GztCloud.disconnect(); } catch (err) {}
+var mask = e.target.closest('.mask');
+if (mask) mask.close();
+toast('已断开');
+setTimeout(function () { location.reload(); }, 500);
+});
 
 act('sync-refresh', function () {
 var m = S.mirror;
