@@ -80,6 +80,23 @@ return;
 /* ② 局域网 */
 if (!/^https?:$/.test(location.protocol)) return;
 
+/* 只有本机 / 内网地址、或跑在同步服务默认端口上时，才可能挂着 sync-server。
+   公网静态托管（GitHub Pages 等）一定没有，就别白发一个注定 404 的请求 ——
+   既在控制台留红字，又多一次无用的往返。 */
+function maybeLocalHost() {
+var h = String(location.hostname || '').toLowerCase();
+if (!h || h === 'localhost' || h === '127.0.0.1' || h === '::1') return true;
+if (/\.local$/.test(h)) return true;
+if (/^192\.168\./.test(h)) return true;
+if (/^10\./.test(h)) return true;
+if (/^172\.(1[6-9]|2\d|3[01])\./.test(h)) return true;
+if (String(location.port) === '8731') return true;
+/* 手动指定：公网域名上挂了本机服务时，地址后加 ?lan=1 强制探测 */
+if (/[?&]lan=1(&|$)/.test(location.search)) return true;
+return false;
+}
+if (!maybeLocalHost()) return;
+
 try {
 g.fetch(withKey(SYNC_HEALTH), { cache: 'no-store' })
 .then(function (r) { return r.ok ? r.json() : null; })
