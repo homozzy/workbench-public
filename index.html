@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light" data-tint="xuan">
+<head>
+<meta charset="UTF-8">
+<!-- viewport-fit=cover：不加这一句，刘海/挖孔屏上 env(safe-area-inset-top) 恒为 0，
+     页面顶部永远贴着屏幕物理边缘算，怎么调间距都不像原生 App。 -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>我的工作台</title>
+<script>window.__GZT_BUILD="1794823540823";</script>
+<!-- 空的图标：不写这一行，浏览器会去要 /favicon.ico 拿到 404，
+     控制台永远挂着一条红字，排查真问题时很碍事。 -->
+<link rel="icon" href="data:,">
+<!-- 装成 App 用（PWA）：清单、图标、状态栏。
+     图标是 ref/make_icons.py 画的（纸色底 + 朱红方印 + 楷体「台」），
+     配色抄的是 theme.css 里的 --accent 与 --seal-ink。 -->
+<!-- 清单地址必须自带 sharecode：这个站不带口令一律 403，而浏览器取 manifest
+     时默认**不带凭据**（cookie 帮不上），真机探针实测裸地址连吃两个 403。
+     crossorigin="use-credentials" 再补上 cookie 这一路，两条都留着更稳。
+     这里的码要和 manifest 里的 start_url 一致 —— 换分享码时两处一起改。 -->
+<link rel="manifest" href="manifest.webmanifest">
+<!-- 状态栏跟纸色走，别跟印章走：安卓会把 theme-color 压暗约 40%，
+     朱红 #8c3b2e 实测落成 #54231c，和纸面割成两块（用户反馈"顶部颜色难看"）。
+     这个值是启动那一瞬间的默认值，applyTheme() 会按当前纸色/明暗再刷一次。 -->
+<meta name="theme-color" content="#f7f3ea">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1794823540823">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="工作台">
+<meta name="description" content="读书笔记 · 藏书阁 · 大事记 · 日记 · 账本 · 文档 · 沙滩，一个人的桌面。">
+<link rel="stylesheet" href="css/theme.css?v=1794823540823">
+<link rel="stylesheet" href="css/shell.css?v=1794823540823">
+<link rel="stylesheet" href="css/views.css?v=1794823540823">
+<link rel="stylesheet" href="css/mobile.css?v=1794823540823">
+
+<script>
+/* PWA 分享目标 / 快捷方式带进来的参数：先收好，再把地址栏抹干净。
+   share_target 给 ?share_title=&share_text=&share_url=；
+   快捷方式给 ?go=notes&new=1。
+
+   为什么必须抹掉：这些参数留在地址栏里，每次刷新都会再导入一遍 ——
+   同一条链接会在沙滩里堆成一串。会话级就够，它只服务这一次打开。
+   URLSearchParams 不存在的老 WebView 直接跳过，页面照常启动。 */
+(function () {
+  var q = location.search || '';
+  if (!/[?&](share_title|share_text|share_url|go|new)=/.test(q)) return;
+  try {
+    var sp = new URLSearchParams(q);
+    var share = {
+      title: sp.get('share_title') || '',
+      text: sp.get('share_text') || '',
+      url: sp.get('share_url') || ''
+    };
+    if (share.title || share.text || share.url) {
+      sessionStorage.setItem('gzt.share_in', JSON.stringify(share));
+    }
+    var go = sp.get('go') || '';
+    if (go) sessionStorage.setItem('gzt.go', JSON.stringify({ mod: go, isNew: sp.get('new') === '1' }));
+    ['share_title', 'share_text', 'share_url', 'go', 'new'].forEach(function (k) { sp.delete(k); });
+    var rest = sp.toString();
+    history.replaceState(null, '', location.pathname + (rest ? '?' + rest : '') + (location.hash || ''));
+  } catch (e) { }
+})();
+</script>
+<script>window.__GZT_LAZY={"build":"1794823540823","maps":{"js/notes.js":["notes"],"js/wordbook.js":["words"],"js/site.js":["site"]},"data":[]};</script>
+<script src="js/tint.js?v=1794823540823"></script>
+
+<script>
+/* 第一帧的纸色：必须在样式生效前铺好，否则会看见"先宣纸、再换纸"地闪一下。
+   这里只做一件事 —— 从存档里读出纸色与明暗，把变量铺上 <html>。 */
+(function () {
+  var bg = '#f7f3ea';
+  var meta = { tint: 'xuan', theme: 'auto', custom: null };
+  try {
+    var raw = localStorage.getItem('gzt.v2');
+    if (raw) {
+      var d = JSON.parse(raw);
+      if (d && d.meta) meta = { tint: d.meta.tint || 'xuan', theme: d.meta.theme || 'auto', custom: d.meta.custom || null };
+      else if (d && d.notes && d.notes.length) bg = bg;
+    }
+  } catch (e) {}
+  var mode = meta.theme === 'auto'
+    ? (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+    : meta.theme;
+  var p = window.Tint.palette(meta.tint, mode, meta.custom);
+  var root = document.documentElement;
+  Object.keys(p).forEach(function (k) { root.style.setProperty('--' + k, p[k]); });
+  root.setAttribute('data-theme', mode);
+  root.setAttribute('data-tint', meta.tint);
+})();
+</script>
+</head>
+<body>
+
+<aside>
+  <div class="brand">
+    <div class="seal" id="brandSeal">台</div>
+    <h1 id="brandName" title="点这里给工作台改名">我的工作台</h1>
+  </div>
+  <div class="nav-item active" data-view="overview" data-m-core="1" tabindex="0" role="button"><span class="ov-glyph">⌂</span><span class="nm">功能总览</span></div>
+  <!-- 九个模块由 js/shell.js 的 renderRail() 按组填进来：
+       写点东西 / 读与学 / 日常流水。这里原来写死一行标题，九项全平铺在下面 ——
+       找「数据同步」要穿过九个内容项，而且左栏顺序跟着总览卡片走。 -->
+  <div id="moduleList"></div>
+  <div class="nav-section">平台</div>
+  <div class="nav-item" id="navSearch" tabindex="0" role="button"><span style="width:18px;text-align:center;color:var(--ink-faint)">⌕</span><span class="nm">全站搜索</span><span class="badge">Ctrl K</span></div>
+  <!-- 数据同步是"设置"不是"平台"：它不是去哪儿，是维护这台工作台本身。
+       和「检查更新」放同一组，找的时候不用再穿过九个内容模块。 -->
+  <div class="nav-section">设置</div>
+  <div class="nav-item" data-view="sync" tabindex="0" role="button"><span style="width:18px;text-align:center;color:var(--ink-faint)">⇅</span><span class="nm">数据同步</span></div>
+  <div class="colophon" id="colophon"></div>
+  <!-- 手机「检查更新」收在这里：只在窄屏「更多」面板展开时露一格，
+       平时完全不占屏幕。原来是右下角常驻浮标，压着正文还跟回顶按钮打架。
+       不能带 data-view —— 带上了会被导航委托当成模块切换。 -->
+  <button class="nav-item m-upd-btn" id="gztUpdateBtn" type="button"
+          aria-label="检查更新" title="检查更新">
+    <span class="nav-mark" style="--tint:#8a7f6d;--tint-dark:#a89a83">↻</span>
+    <span class="nm gu-tx" id="gztUpdateTx">检查更新</span>
+  </button>
+  <!-- 只在窄屏出现：把放不下的模块收进一个上滑面板。
+       必须排在 aside 末尾，且不能带 data-view —— 带上了会被导航委托当成模块点击。 -->
+  <div class="nav-item m-more-btn" id="mMoreBtn" title="全部模块" tabindex="0" role="button">
+    <span class="nav-mark" style="--tint:#8a7f6d;--tint-dark:#a89a83">⋯</span>
+    <span class="nm">更多</span>
+  </div>
+</aside>
+<div class="m-more-mask" id="mMoreMask"></div>
+
+<section class="right">
+  <div class="tabbar hidden" id="tabbar"></div>
+  <!-- 手机端应用栏。为什么需要：手机上左栏被收进底部工具条，页面顶部只剩
+       一行小字日期，滚动时这行字还会消失 —— 状态栏下面没有"我在哪里"的锚点，
+       看起来就不像一个 App。这一条 40px 的栏给它一个明确的顶边，
+       顺带把全站搜索和外观从「更多」面板里提出来。桌面不显示。 -->
+  <header class="mbar" id="mbar">
+    <div class="mbar-l">
+      <span class="mbar-t" id="mbarTitle">我的工作台</span>
+      <span class="mbar-sub" id="mbarDate"></span>
+    </div>
+    <span class="mbar-r">
+      <button class="mbar-btn" id="mbarSearch" type="button" aria-label="全站搜索">
+        <svg width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="7" cy="7" r="4.6"/><path d="M10.4 10.4 14 14"/></svg>
+      </button>
+      <button class="mbar-btn" id="mbarTheme" type="button" aria-label="外观">
+        <svg width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="5.6"/><path d="M8 2.4a5.6 5.6 0 0 0 0 11.2z" fill="currentColor" stroke="none"/></svg>
+      </button>
+    </span>
+  </header>
+  <div class="panes" id="panes">
+    <div class="pane overview active" id="pane-overview"></div>
+  </div>
+</section>
+
+<div class="toast" id="toast"><span id="toastMsg"></span></div>
+<div class="undo" id="undo"><span id="undoText">已删除</span><button id="undoBtn">撤销</button></div>
+<div class="td-pop" id="tdPop"></div>
+<div id="modalRoot"></div>
+
+<div id="rename-overlay">
+  <div class="rn-card">
+    <div class="rn-seal" id="rnSeal">台</div>
+    <div class="rn-title">给这个工作台起个名字</div>
+    <!-- 首次打开只问名字，新用户不知道自己在装什么。补一句它到底装了什么，
+         比再加一个引导页便宜（也符合"一屏只说一件事"）。 -->
+    <div class="rn-tip" style="margin:-2px 0 10px">读书笔记、藏书、日记、账本，都在这一处</div>
+    <!-- 后缀从输入框右边挪进下面那行说明：
+         挂在框外时它跟框里的字对不齐（一行里两个基线），挪进框里又要靠内边距去顶，
+         两头都不稳。写在一句话里最省事，意思一点没丢。 -->
+    <input type="text" id="rnInput" class="rn-input" maxlength="12"
+           autocomplete="off" spellcheck="false" placeholder="你的名字">
+    <div class="rn-tip">后面会自动接上「的工作台」<br>留空就还叫「我的工作台」，随时能改</div>
+    <div class="rn-btns">
+      <button class="btn ghost" id="rnCancel">以后再说</button>
+      <button class="btn primary" id="rnOk">就叫这个</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/pinyin-initial.js?v=1794823540823"></script>
+<script src="js/beach-core.js?v=1794823540823"></script>
+<script src="js/store.js?v=1794823540823"></script>
+<script src="js/shell.js?v=1794823540823"></script>
+
+<script src="js/views.js?v=1794823540823"></script>
+
+
+<script src="js/extras.js?v=1794823540823"></script>
+<script src="js/boot.js?v=1794823540823"></script>
+
+<script>
+/* 手动检查更新：手机「更多」面板里的那一格与「数据同步」页共用这一个实现。
+   为什么挂 window 而不放进 js/：拆包脚本只摘 <script src>，内联的这段
+   在任何加载顺序下都先可用；而"点了没反应"恰恰是最需要它的时候。
+   「有新版本了」是另一条被动提示（下面 SW 注册段），只在真装好新版时冒出来，
+   两者不重复：一个是主动查，一个是查到了叫你切。 */
+(function () {
+  var busy = false;
+  function noop() {}
+  window.GZT_UPDATE = function (say) {
+    if (busy) return;
+    busy = true;
+    say = typeof say === 'function' ? say : noop;
+    say('正在检查…');
+    var stopped = false;
+    function done() { stopped = true; busy = false; }
+    function reloadNow() {
+      if (stopped) return;
+      done();
+      say('正在重新载入…');
+      location.reload();
+    }
+    /* 没装 SW（本地打开、老浏览器）：整页重载本身就是最可靠的更新 */
+    if (!('serviceWorker' in navigator)) { reloadNow(); return; }
+    try {
+      navigator.serviceWorker.getRegistration().then(function (reg) {
+        if (!reg) { reloadNow(); return; }
+        var tries = 0;
+        function poll() {
+          if (stopped) return;
+          /* 新 SW 装好会停在 waiting：让它接管，controllerchange 会 reload。
+             不能自己再刷一次 —— 两次 reload 叠在一起会把刚写的字丢掉。 */
+          if (reg.waiting) {
+            done();
+            say('发现新版本，正在切换…');
+            try { reg.waiting.postMessage('skip-waiting'); }
+            catch (e) { location.reload(); }
+            return;
+          }
+          /* update() 之后 installing → installed 是异步的，留 4 次 × 600ms 收网 */
+          if (++tries < 4) { setTimeout(poll, 600); return; }
+          reloadNow();
+        }
+        if (reg.waiting) { poll(); return; }       /* 上次没切过去的那版，立刻切 */
+        try { Promise.resolve(reg.update()).then(poll, poll); }
+        catch (e) { poll(); }
+      }).catch(reloadNow);
+    } catch (e) { reloadNow(); }
+  };
+  var btn = document.getElementById('gztUpdateBtn');
+  if (btn) btn.addEventListener('click', function () {
+    /* 按钮在「更多」浮层里，先收起来，别让它盖住即将重载的页面 */
+    document.body.classList.remove('m-more-open');
+    var tx = document.getElementById('gztUpdateTx');
+    /* 状态文字一律收成三个字，别把这一格撑变形 */
+    window.GZT_UPDATE(function (t) { if (tx) tx.textContent = t.length > 3 ? '更新中' : t; });
+  });
+})();
+</script>
+
+<script>
+/* 登记 service worker —— 装了 PWA 之后断网也能打开。
+   三道保险，缺一个就会在某种环境下抛错、或者把旧版本永久钉住：
+   ① 没有 serviceWorker 就退出（file:// 打开、老浏览器、jsdom 测试环境）；
+   ② 只在 https 或 localhost 登记 —— 别的环境浏览器会直接拒绝；
+   ③ 更新不自动刷：新版本装好之后弹一条"点这里刷新"，
+      由人决定什么时候切。自动 reload 会把正在写的字弄丢。 */
+(function () {
+  if (!('serviceWorker' in navigator)) return;
+  var secure = location.protocol === 'https:' ||
+    /^(localhost|127\.0\.0\.1)$/.test(location.hostname || '');
+  if (!secure) return;
+
+  function offer(w) {
+    if (!w || document.querySelector('[data-gzt-update]')) return;
+    /* 用 button 而不是 div + onclick：键盘能 Tab 到、回车能触发、
+       读屏会念成按钮。padding 12/12 + 行高 20.8 ≈ 44.8px，过 44 那条线。 */
+    var bar = document.createElement('button');
+    bar.type = 'button';
+    bar.setAttribute('data-gzt-update', '1');
+    bar.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:2147483645;cursor:pointer;' +
+      'display:block;width:100%;border:0;margin:0;appearance:none;' +
+      'background:#3a3428;color:#f4efe4;text-align:center;padding:12px 14px;' +
+      'font:13px/1.6 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif';
+    bar.textContent = '有新版本了 —— 点这里刷新';
+    bar.onclick = function () { w.postMessage('skip-waiting'); };
+    document.body.appendChild(bar);
+  }
+
+  var reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', function () {
+    if (reloaded) return;                 /* postMessage 之后可能触发多次，只刷一次 */
+    reloaded = true;
+    location.reload();
+  });
+
+  try {
+    navigator.serviceWorker.register('sw.js', { scope: './' }).then(function (reg) {
+      if (reg.waiting) offer(reg.waiting);          /* 上次没切过去的那版 */
+      reg.addEventListener('updatefound', function () {
+        var w = reg.installing;
+        if (!w) return;
+        w.addEventListener('statechange', function () {
+          /* 有 controller 才说明这是"更新"而不是首次安装 */
+          if (w.state === 'installed' && navigator.serviceWorker.controller) offer(w);
+        });
+      });
+    }).catch(function () { /* 登记失败不影响正常使用 */ });
+  } catch (e) { }
+})();
+</script>
+</body>
+</html>
