@@ -628,14 +628,16 @@ else if (dirtyLocal) why = 'dirty';
 else {
 var d = g.document;
 if (!d) why = 'no-doc';
-else if (d.querySelector && d.querySelector('.mask')) why = 'mask';
+else if (d.querySelector && d.querySelector('.mask:not(.mask-passive)')) why = 'mask';
 
 else {
 var ae = d.activeElement;
-/* 首启的「给工作台起个名字」浮层也带输入框，但它不是在写内容，
-   不该因为它挡着就不同步。 */
+/* 首启的「给工作台起个名字」浮层也带输入框，但它不是在写内容；
+   只读提示窗（同步码那段）里的输入框同理 —— 用户点一下选中复制，
+   不等于在编辑，不该因为这个就把自动同步停掉。 */
 var inRename = !!(ae && ae.closest && ae.closest('#rename-overlay'));
-if (ae && !inRename && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName || '')) why = 'typing';
+var inPassive = !!(ae && ae.closest && ae.closest('.mask-passive'));
+if (ae && !inRename && !inPassive && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName || '')) why = 'typing';
 }
 }
 try { g.__gztWhy = why; } catch (e) {}

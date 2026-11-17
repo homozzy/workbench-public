@@ -306,7 +306,9 @@ try { if (back.isConnected && typeof back.focus === 'function') back.focus(); } 
 function modal(opts) {
 opts = opts || {};
 var mask = document.createElement('div');
-mask.className = 'mask';
+/* passive：只读提示类弹窗。它不会挡住后台自动同步 ——
+   否则用户一开着「同步码」窗口，别的设备的改动就永远进不来。 */
+mask.className = 'mask' + (opts.passive ? ' mask-passive' : '');
 mask.innerHTML =
 '<div class="modal' + (opts.wide ? ' wide' : '') + '">' +
 '  <div class="modal-head"><div class="modal-title">' + esc(opts.title || '') + '</div>' +
@@ -2239,16 +2241,20 @@ modal({
 wide: true,
 title: '开启跨网络同步',
 body:
-'<p class="hint">用一个你自己的 GitHub 私密 Gist 当中转，任何网络、任何设备都能同步。</p>' +
-'<ol class="hint" style="padding-left:20px;margin:10px 0">' +
-'<li>打开 <code>github.com/settings/tokens/new</code>（Classic token）</li>' +
-'<li>Note 随便写，比如「工作台同步」；有效期选个长的</li>' +
-'<li>权限只勾 <b>gist</b> 这一项，别的都不用勾</li>' +
-'<li>生成后复制那串 <code>ghp_...</code>，粘到下面</li>' +
-'</ol>' +
-'<p class="hint">已经在别的设备上开通过？直接粘贴那边的「同步码」（<code>GZT1.</code> 开头）也行。</p>' +
-'<label class="hint" style="display:block;margin-top:12px">令牌或同步码</label>' +
-'<textarea id="gistIn" class="st-in" rows="4" spellcheck="false" ' +
+'<div class="hint" style="background:#f7f3ea;border:1px solid #e2d9c8;padding:10px 12px;border-radius:6px;margin-bottom:14px">' +
+'<b>两台设备要指向同一个 Gist 才能同步。</b><br>' +
+'电脑先配好，手机上就用「同步码」接过去 —— <b>不要两台各点一次「开启」</b>。' +
+'（已经各自点过的，用同一份令牌再连一次会自动认回同一个 Gist。）</div>' +
+'<p class="hint"><b>第 1 步：生成令牌</b></p>' +
+'<p class="hint">点下面这个按钮，权限已经替你勾好了（只有 gist），有效期 90 天：</p>' +
+'<p style="margin:10px 0"><a class="btn primary" style="display:inline-block;text-decoration:none" ' +
+'href="https://github.com/settings/tokens/new?scopes=gist&description=%E5%B7%A5%E4%BD%9C%E5%8F%B0%E5%90%8C%E6%AD%A5" ' +
+'target="_blank" rel="noopener">打开 GitHub 生成令牌 ↗</a></p>' +
+'<p class="hint">页面打开后拉到最下面，点绿色 <b>Generate token</b>，复制那串 <code>ghp_...</code>。' +
+'<br>（想用久一点，可以把 Expiration 改成 No expiration。）</p>' +
+'<p class="hint" style="margin-top:16px"><b>第 2 步：粘进来</b></p>' +
+'<label class="hint" style="display:block;margin-top:8px">令牌（ghp_...）或别的设备给的同步码（GZT1....）</label>' +
+'<textarea id="gistIn" class="st-in" rows="3" spellcheck="false" ' +
 'placeholder="ghp_xxxxxxxxxxxxxxxx   或   GZT1.eyJ0Ijoi..."></textarea>' +
 '<div class="hint" id="gistMsg" style="margin-top:8px"></div>',
 foot: '<button class="btn" data-close>算了</button>' +
@@ -2270,10 +2276,34 @@ if (!r.ok) {
 if (msg) { msg.textContent = r.msg || '连接失败'; msg.style.color = '#8a2f2b'; }
 return;
 }
+/* 连上之后直接把同步码摆在用户面前 —— 下一步就是拿去给另一台设备 */
 if (msg) { msg.textContent = '连上了，正在重新载入…'; msg.style.color = '#2f6b4f'; }
+var code = r.code || (g.GztCloud ? g.GztCloud.code() : '');
+try { sessionStorage.setItem('gzt.showcode', code || ''); } catch (err2) {}
 setTimeout(function () { location.reload(); }, 700);
 }, function (err) {
 if (msg) msg.textContent = (err && err.message) || '连接失败';
+});
+});
+
+/* 连接后自动弹一次同步码，省得用户再去找 */
+act('gist-code-auto', function () {
+var code = '';
+try { code = sessionStorage.getItem('gzt.showcode') || ''; } catch (e) {}
+if (!code) return;
+try { sessionStorage.removeItem('gzt.showcode'); } catch (e) {}
+modal({
+wide: true,
+passive: true,
+title: '这一步别漏：让另一台设备接上',
+body:
+'<p class="hint">这台设备已经连上 Gist 了。<b>现在把下面这段发到另一台设备</b>' +
+'（微信发给自己、AirDrop、复制粘贴都行），在那台的「开启跨网络同步…」里粘贴一次即可。</p>' +
+'<p class="hint"><b>不要</b>在另一台上重新点「开启」再建一个新的 Gist —— 那样两台会各存各的。</p>' +
+'<textarea class="st-in" rows="6" readonly onclick="this.select()">' + esc(code) + '</textarea>' +
+'<p class="hint" style="color:#8a2f2b">这段文字等于钥匙，只发给你自己的设备，别发群里。</p>',
+foot: '<button class="btn" data-close>知道了</button>' +
+'<button class="btn primary" data-act="gist-copy">复制这段</button>'
 });
 });
 
@@ -2282,6 +2312,7 @@ var code = g.GztCloud ? g.GztCloud.code() : '';
 if (!code) { toast('还没连上', 'err'); return; }
 modal({
 wide: true,
+passive: true,
 title: '同步码',
 body: '<p class="hint">在这台设备上「断开」或在别的设备上粘贴这一段，就能用同一份数据。' +
 '<br><b>这段文字等于账号钥匙</b>，只发给你自己的设备，别发群里。</p>' +
@@ -2739,6 +2770,15 @@ histInit();
 showCorruptNotice();
 
 setTimeout(applyLanding, 600);
+
+/* 刚连上跨网络同步的那一次，自动把同步码摆出来，提醒去另一台设备接 */
+setTimeout(function () {
+try {
+if (sessionStorage.getItem('gzt.showcode')) {
+if (acts['gist-code-auto']) acts['gist-code-auto'](document.body, { target: document.body });
+}
+} catch (e) {}
+}, 1400);
 
 var mbs = $('#mbarSearch'), mbt = $('#mbarTheme');
 if (mbs) mbs.addEventListener('click', function () {

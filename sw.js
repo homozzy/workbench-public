@@ -17,8 +17,8 @@
  *      要是把存档响应缓存了，断网时会把旧数据当新的推回去，那是丢数据的路子。
  */
 
-const BUILD = '1794950000001';
-const SHELL = ["css/theme.css?v=1794950000001", "css/shell.css?v=1794950000001", "css/views.css?v=1794950000001", "css/mobile.css?v=1794950000001", "js/tint.js?v=1794950000001", "js/pinyin-initial.js?v=1794950000001", "js/beach-core.js?v=1794950000001", "js/cloud-gist.js?v=1794950000001", "js/store.js?v=1794950000001", "js/shell.js?v=1794950000001", "js/views.js?v=1794950000001", "js/extras.js?v=1794950000001", "js/boot.js?v=1794950000001", "./index.html", "manifest.webmanifest", "icons/apple-touch-icon.png?v=1794950000001", "icons/icon-192.png?v=1794950000001", "icons/icon-512.png?v=1794950000001", "icons/icon-maskable-512.png?v=1794950000001", "js/notes.js?v=1794950000001", "js/wordbook.js?v=1794950000001", "js/site.js?v=1794950000001"];
+const BUILD = '1794990000000';
+const SHELL = ["css/theme.css?v=1794990000000", "css/shell.css?v=1794990000000", "css/views.css?v=1794990000000", "css/mobile.css?v=1794990000000", "js/tint.js?v=1794990000000", "js/pinyin-initial.js?v=1794990000000", "js/beach-core.js?v=1794990000000", "js/cloud-gist.js?v=1794990000000", "js/store.js?v=1794990000000", "js/shell.js?v=1794990000000", "js/views.js?v=1794990000000", "js/extras.js?v=1794990000000", "js/boot.js?v=1794990000000", "./index.html", "manifest.webmanifest", "icons/apple-touch-icon.png?v=1794990000000", "icons/icon-192.png?v=1794990000000", "icons/icon-512.png?v=1794990000000", "icons/icon-maskable-512.png?v=1794990000000", "js/notes.js?v=1794990000000", "js/wordbook.js?v=1794990000000", "js/site.js?v=1794990000000"];
 
 const CACHE = 'gzt-shell-' + BUILD;
 const SHELL_PAGE = './index.html';

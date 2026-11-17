@@ -20,6 +20,7 @@
 
   var CFG_KEY = 'gzt.cloud.gist';
   var FILE = 'workbench.json';
+  var DESC = '工作台同步 · 私密';
   var API = 'https://api.github.com';
 
   function readCfg() {
@@ -153,7 +154,10 @@
         return Promise.resolve({ ok: true, msg: '已连接', reload: true });
       }
 
-      /* 当成令牌：先验证一下，再自动建一个私密 Gist */
+      /* 当成令牌：先验证身份，然后「先找后建」。
+         这一步很关键 —— 如果每台设备都各建一个新 Gist，
+         电脑和手机会指向两个不同的中转站，数据永远对不上。
+         所以先翻一遍账号下的 Gist，找到之前建过的那一个就复用。 */
       var h = {
         'Authorization': 'Bearer ' + input,
         'Accept': 'application/vnd.github+json',
@@ -162,26 +166,48 @@
       return g.fetch(API + '/user', { headers: h })
         .then(function (r) {
           if (!r.ok) throw new Error('令牌无效（HTTP ' + r.status + '）');
+          return g.fetch(API + '/gists?per_page=100', { headers: h });
+        })
+        .then(function (r) {
+          if (!r.ok) throw new Error('读不到你的 Gist 列表（HTTP ' + r.status + '），检查令牌是否勾了 gist 权限');
+          return r.json();
+        })
+        .then(function (list) {
+          /* 账号下可能有好几个同名的（以前每台设备各建过一次）。
+             挑内容最大的那个 —— 空壳只有 11 字节，有数据的那个才该被复用。 */
+          var hit = null, best = -1;
+          (list || []).forEach(function (it) {
+            if (!it || !it.files || !it.files[FILE]) return;
+            if (!/工作台同步/.test(String(it.description || ''))) return;
+            var size = Number((it.files[FILE] && it.files[FILE].size) || 0);
+            if (size > best) { best = size; hit = it.id; }
+          });
+          if (hit) return { id: hit, reused: true };
           return g.fetch(API + '/gists', {
             method: 'POST',
             headers: h,
             body: JSON.stringify({
-              description: '工作台同步 · 私密',
+              description: DESC,
               public: false,
               /* GitHub 不允许文件内容为空，给个最小占位；
                  客户端判断"空"的门槛是 20 字符，这段不会挡住本机数据上传。 */
               files: (function () { var o = {}; o[FILE] = { content: '{"meta":{}}' }; return o; })()
             })
-          });
+          }).then(function (r2) {
+            if (!r2.ok) throw new Error('建 Gist 失败（HTTP ' + r2.status + '），检查令牌是否勾了 Gists 权限');
+            return r2.json();
+          }).then(function (j2) { return { id: j2.id, reused: false }; });
         })
-        .then(function (r) {
-          if (!r.ok) throw new Error('建 Gist 失败（HTTP ' + r.status + '），检查令牌是否勾了 Gists 权限');
-          return r.json();
-        })
-        .then(function (j) {
-          var c = { token: input, gistId: j.id };
+        .then(function (got) {
+          var c = { token: input, gistId: got.id };
           try { g.localStorage.setItem(CFG_KEY, JSON.stringify(c)); } catch (e) { }
-          return { ok: true, msg: '已连接', reload: true, code: encodeCode(c) };
+          return {
+            ok: true,
+            msg: got.reused ? '已连上之前建过的那个 Gist' : '已连接',
+            reload: true,
+            reused: got.reused,
+            code: encodeCode(c)
+          };
         })
         .catch(function (e) {
           return { ok: false, msg: (e && e.message) || '连接失败' };
