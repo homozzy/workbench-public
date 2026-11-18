@@ -2131,7 +2131,22 @@ if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
 }, 60);
 }
 });
+
 A.act('w-del', function (el) {
+var d = S.db.docs.filter(function (x) { return x.id === el.dataset.id; })[0];
+if (!d) return;
+var chars = String(d.content || '').replace(/\s/g, '').length;
+A.modal({
+title: '删掉这一篇？',
+body: '<p class="hint">《' + A.esc(d.title) + '》' +
+(chars ? '（' + chars + ' 字）' : '') +
+'会一起清掉。删完还有几秒能撤销，过了就找不回来了。</p>',
+foot: '<button class="btn" data-close>再想想</button>' +
+'<button class="btn danger" data-act="w-del-ok" data-id="' + d.id + '">确认删掉</button>'
+});
+});
+A.act('w-del-ok', function (el) {
+A.closeTopModal();
 flushDocSave();
 
 var snap = JSON.parse(JSON.stringify(S.db.docs));
